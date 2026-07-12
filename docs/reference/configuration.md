@@ -22,6 +22,7 @@ Relative `output`, storage-state, and setup-script paths resolve from the config
 | ------------- | ---------- | ---------------------- | ------------------------------------------------------ |
 | `reference`   | target     | Yes                    | —                                                      |
 | `candidate`   | target     | Yes                    | —                                                      |
+| `auth`        | object     | No                     | Namespace derived from the configuration path.         |
 | `routes`      | route[]    | Yes                    | —                                                      |
 | `viewports`   | viewport[] | No                     | `[{ width: 1440, height: 900 }]`                       |
 | `output`      | string     | No when loading a file | `./artifacts`                                          |
@@ -34,7 +35,21 @@ Relative `output`, storage-state, and setup-script paths resolve from the config
 
 ## Targets and routes
 
-`reference` and `candidate` each require `baseUrl` and optionally accept a Playwright `storageState` path.
+`reference` and `candidate` each require `baseUrl`. They may additionally select one authentication source:
+
+| Field          | Purpose                                                                           |
+| -------------- | --------------------------------------------------------------------------------- |
+| `authProfile`  | Sameframe-managed state scoped to the repository, namespace, target, and profile. |
+| `storageState` | Explicit Playwright state path for CI or externally managed credentials.          |
+
+A target cannot set both fields. Profile and namespace names may contain letters, numbers, dots, underscores, and hyphens.
+
+Set an optional stable namespace when the repository has more than one comparison effort:
+
+```yaml
+auth:
+  namespace: pricing-migration
+```
 
 Each route uses either one shared path or an explicit mapping:
 

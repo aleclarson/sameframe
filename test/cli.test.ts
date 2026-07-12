@@ -53,4 +53,23 @@ describe('CLI parsing', () => {
       expect(result.error).toContain('--selector')
     }
   })
+
+  test('parses nested managed-authentication commands', async () => {
+    const result = await parse(app, [
+      'auth',
+      'login',
+      '--config',
+      'sameframe.yaml',
+      '--target',
+      'candidate',
+      '--force',
+    ])
+    expect(result).toMatchObject({
+      _tag: 'ok',
+      value: {
+        command: 'auth',
+        args: { command: 'login', args: { target: 'candidate', force: true } },
+      },
+    })
+  })
 })

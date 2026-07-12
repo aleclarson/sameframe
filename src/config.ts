@@ -54,6 +54,21 @@ export async function loadConfig(path: string): Promise<SameframeConfig> {
 }
 
 export function validateConfig(config: SameframeConfig): void {
+  for (const [name, target] of Object.entries({
+    reference: config.reference,
+    candidate: config.candidate,
+  })) {
+    if (target.storageState && target.authProfile)
+      throw new Error(`${name} cannot use both storageState and authProfile`)
+    if (target.authProfile && !/^[a-zA-Z0-9._-]+$/.test(target.authProfile))
+      throw new Error(
+        `${name}.authProfile may contain only letters, numbers, dots, underscores, and hyphens`,
+      )
+  }
+  if (config.auth?.namespace && !/^[a-zA-Z0-9._-]+$/.test(config.auth.namespace))
+    throw new Error(
+      'auth.namespace may contain only letters, numbers, dots, underscores, and hyphens',
+    )
   for (const route of config.routes) {
     if (!route.path && (!route.referencePath || !route.candidatePath))
       throw new Error('Each route needs path or both referencePath and candidatePath')

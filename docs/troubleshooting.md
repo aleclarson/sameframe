@@ -46,6 +46,19 @@ capture:
 
 For clocks, rotating content, or personalized regions, use a targeted ignore, mask, or text normalization rule instead of increasing the timeout indefinitely.
 
+## Managed authentication is missing or belongs to another origin
+
+Create or replace the target profile through visible Chromium:
+
+```bash
+pnpm exec sameframe auth login \
+  --config ./sameframe.yaml \
+  --target candidate \
+  --force
+```
+
+Sameframe records the configured origin as safety metadata. An origin change requires a new login even though origin is not part of the repository-scoped storage key.
+
 ## Expected dynamic content creates findings
 
 Use [Configure comparisons](guides/configure-comparisons.md) to choose among:

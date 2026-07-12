@@ -3,6 +3,7 @@ import { mkdir, readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
 import { targetPaths, writeJson } from './artifacts.js'
+import { resolveManagedStorageState } from './auth.js'
 import { configHash, defaults } from './config.js'
 import { validateSchema } from './schemas.js'
 import type { ComparisonJob, Diagnostic, PageArtifact, UiNode } from './types.js'
@@ -203,16 +204,38 @@ export async function captureTarget(
 ): Promise<CaptureResult> {
   const diagnostics: Diagnostic[] = []
   const requestedUrl = target === 'reference' ? job.referenceUrl : job.candidateUrl
-  const targetConfig = job.config[target]
   const capture = job.config.capture ?? {}
-  const context = await browser.newContext({
-    viewport: job.viewport,
-    locale: capture.locale ?? defaults.locale,
-    timezoneId: capture.timezone ?? defaults.timezone,
-    deviceScaleFactor: 1,
-    reducedMotion: 'reduce',
-    storageState: targetConfig.storageState,
-  })
+  let context
+  try {
+    const storageState = await resolveManagedStorageState(job.config, target, job.configPath)
+    context = await browser.newContext({
+      viewport: job.viewport,
+      locale: capture.locale ?? defaults.locale,
+      timezoneId: capture.timezone ?? defaults.timezone,
+      deviceScaleFactor: 1,
+      reducedMotion: 'reduce',
+      storageState,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const artifact: PageArtifact = {
+      schemaVersion: '1.0.0',
+      target,
+      requestedUrl,
+      navigationDurationMs: 0,
+      redirects: [],
+      stabilized: false,
+      diagnostics: [{ type: 'setup', message, severity: 'critical' }],
+      metadata: {
+        viewport: job.viewport,
+        browserVersion: browser.version(),
+        configHash: configHash(job.config),
+      },
+    }
+    await validateSchema('page', artifact)
+    await writeJson(targetPaths(job.output, target).page, artifact)
+    return { target, page: artifact, error: message }
+  }
   const page = await context.newPage()
   const redirects: string[] = []
   page.on('console', (message) => {

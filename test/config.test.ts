@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { expandConfig, parseViewport } from '../src/config.js'
+import { expandConfig, parseViewport, validateConfig } from '../src/config.js'
 import { validateSchema } from '../src/schemas.js'
 
 describe('configuration', () => {
@@ -35,5 +35,20 @@ describe('configuration', () => {
     await expect(
       validateSchema('comparison-batch', { schemaVersion: '1.0.0', results: [result] }),
     ).resolves.toBeUndefined()
+  })
+
+  test('rejects ambiguous authentication sources', () => {
+    expect(() =>
+      validateConfig({
+        reference: {
+          baseUrl: 'https://reference.test',
+          storageState: 'state.json',
+          authProfile: 'user',
+        },
+        candidate: { baseUrl: 'https://candidate.test' },
+        routes: [{ path: '/' }],
+        output: './artifacts',
+      }),
+    ).toThrow('both storageState and authProfile')
   })
 })

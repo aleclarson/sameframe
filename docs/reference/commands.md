@@ -69,6 +69,31 @@ sameframe inspect-finding --page-id <id> --finding-id <id> [--output <dir>]
 
 Returns the finding and paths within its persisted evidence bundle.
 
+## `auth login`
+
+```text
+sameframe auth login --config <path> --target <reference|candidate>
+                     [--login-url <url>] [--force] [--no-indexed-db]
+```
+
+Opens visible Chromium for a human to authenticate, then saves managed browser state outside the repository. The configured target requires `authProfile`.
+
+## `auth list`
+
+```text
+sameframe auth list
+```
+
+Lists namespace, target, profile, origin, and creation time for the current Git repository. Credential values are never displayed.
+
+## `auth remove`
+
+```text
+sameframe auth remove --config <path> --target <reference|candidate>
+```
+
+Deletes the configured managed state and its credential-free metadata.
+
 ## Artifact lookup
 
 Inspection commands search `./artifacts` unless `--output` is provided. They recursively locate `comparison/result.json` with the requested page ID. If more than one artifact set has that ID, pass a narrower output directory.

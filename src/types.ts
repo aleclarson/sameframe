@@ -12,9 +12,16 @@ export interface RouteConfig {
   candidatePath?: string
 }
 
+export interface TargetConfig {
+  baseUrl: string
+  storageState?: string
+  authProfile?: string
+}
+
 export interface SameframeConfig {
-  reference: { baseUrl: string; storageState?: string }
-  candidate: { baseUrl: string; storageState?: string }
+  reference: TargetConfig
+  candidate: TargetConfig
+  auth?: { namespace?: string }
   routes: RouteConfig[]
   viewports?: Viewport[]
   output: string
@@ -44,6 +51,7 @@ export interface ComparisonJob {
   viewport: Viewport
   output: string
   config: SameframeConfig
+  configPath?: string
   selector?: string
 }
 

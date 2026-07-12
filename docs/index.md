@@ -20,6 +20,7 @@ The command writes a compact JSON result to stdout and detailed artifacts beneat
 - [Getting started](getting-started.md) — install Chromium and complete one comparison.
 - [Configure comparisons](guides/configure-comparisons.md) — compare route and viewport matrices while controlling expected noise.
 - [Inspect and verify](guides/inspect-and-verify.md) — move from a finding to source context and a narrow rerun.
+- [Authenticate pages](guides/authenticated-pages.md) — let a human create repository-scoped browser state outside the repository.
 - [Evidence and results](concepts/evidence-and-results.md) — understand captures, matches, findings, assertions, and statuses.
 
 ## Look up details

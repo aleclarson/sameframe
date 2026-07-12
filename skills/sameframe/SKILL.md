@@ -22,6 +22,8 @@ sameframe compare \
 
 Use `--config sameframe.yaml` for route and viewport matrices. Treat exit `0` as pass, `1` as a parity failure, `2` as invalid input, `3` as incomplete capture, and `4` as an internal failure. When requesting JSON, parse stdout only; diagnostics belong on stderr.
 
+For a target with `authProfile`, instruct the human to run `sameframe auth login --config sameframe.yaml --target reference|candidate`. Do not attempt to complete an interactive login for them. Managed state stays in the OS application-data directory and is scoped by Git repository, configuration namespace, target, and profile. Use explicit `storageState` paths for CI-injected credentials.
+
 ## Inspect evidence
 
 Start from finding summaries. Do not open full screenshots or trees unless a finding lacks enough context.

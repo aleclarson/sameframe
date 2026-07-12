@@ -1,4 +1,5 @@
 import { resolve } from 'node:path'
+import packageJson from '../package.json' with { type: 'json' }
 import {
   command,
   flag,
@@ -23,8 +24,9 @@ import {
 } from './inspect.js'
 import { validateSchema } from './schemas.js'
 import type { Bounds, CliResult, ComparisonJob, SameframeConfig, Viewport } from './types.js'
+import { listAuth, login, removeAuth } from './auth.js'
 
-export const version: string = '0.1.1'
+export const version: string = packageJson.version
 
 const viewportType: Type<string, Viewport> = {
   displayName: 'WIDTHxHEIGHT',
@@ -96,6 +98,7 @@ async function runComparison(args: {
   if (args.config) {
     config = await loadConfig(args.config)
     jobs = expandConfig(config)
+    for (const job of jobs) job.configPath = resolve(args.config)
   } else {
     if (!args.reference || !args.candidate || !args.output)
       throw new Error(
@@ -317,6 +320,87 @@ const inspectFindingCommand = command({
   },
 })
 
+const authTarget = option({
+  long: 'target',
+  type: targetType,
+  description: 'Configured target whose authentication state is managed.',
+})
+const authConfig = option({ long: 'config', description: 'Sameframe YAML or JSON configuration.' })
+
+const authLoginCommand = command({
+  name: 'login',
+  description: 'Open Chromium for a human to create managed authentication state.',
+  args: {
+    config: authConfig,
+    target: authTarget,
+    loginUrl: optionalString('login-url', 'Initial login page; defaults to the target base URL.'),
+    force: flag({
+      long: 'force',
+      description: 'Replace existing managed authentication.',
+      defaultValue: () => false,
+    }),
+    noIndexedDB: flag({
+      long: 'no-indexed-db',
+      description: 'Exclude IndexedDB from the saved state.',
+      defaultValue: () => false,
+    }),
+  },
+  async handler(args) {
+    const configPath = resolve(args.config)
+    const config = await loadConfig(configPath)
+    await login(config, args.target, configPath, {
+      loginUrl: args.loginUrl,
+      force: args.force,
+      includeIndexedDB: !args.noIndexedDB,
+    })
+    return 0
+  },
+})
+
+const authListCommand = command({
+  name: 'list',
+  description: 'List credential-free metadata for this repository.',
+  args: {},
+  async handler() {
+    const profiles = await listAuth()
+    if (!profiles.length)
+      console.log('No managed authentication profiles found for this repository.')
+    else
+      console.log(
+        profiles
+          .map(
+            (profile) =>
+              `${profile.namespace}\t${profile.target}\t${profile.profile}\t${profile.origin}\t${profile.createdAt}`,
+          )
+          .join('\n'),
+      )
+    return 0
+  },
+})
+
+const authRemoveCommand = command({
+  name: 'remove',
+  description: 'Delete one managed authentication profile.',
+  args: { config: authConfig, target: authTarget },
+  async handler(args) {
+    const configPath = resolve(args.config)
+    const config = await loadConfig(configPath)
+    const removed = await removeAuth(config, args.target, configPath)
+    console.log(
+      removed
+        ? `Removed managed authentication for ${args.target}.`
+        : `No managed authentication existed for ${args.target}.`,
+    )
+    return 0
+  },
+})
+
+const authCommands = subcommands({
+  name: 'auth',
+  description: 'Manage repository-scoped authentication outside the repository.',
+  cmds: { login: authLoginCommand, list: authListCommand, remove: authRemoveCommand },
+})
+
 export const app = subcommands({
   name: 'sameframe',
   version,
@@ -328,5 +412,6 @@ export const app = subcommands({
     'query-tree': queryTreeCommand,
     'get-subtree': getSubtreeCommand,
     'inspect-finding': inspectFindingCommand,
+    auth: authCommands,
   },
 })

@@ -68,16 +68,20 @@ normalize:
 
 ## Prepare authenticated pages
 
-Use a Playwright storage-state file independently for each target:
+Use a Sameframe-managed profile for local human authentication:
 
 ```yaml
+auth:
+  namespace: pricing-migration
 reference:
   baseUrl: https://legacy.example.com
-  storageState: .auth/reference.json
+  authProfile: migration-user
 candidate:
   baseUrl: http://localhost:3000
-  storageState: .auth/candidate.json
+  authProfile: migration-user
 ```
+
+Then ask a human to run `sameframe auth login` for each target. See [Authenticate pages](authenticated-pages.md) for the complete workflow and OS storage locations. Use an explicit `storageState` path for CI-mounted credentials.
 
 When storage state is insufficient, point `setupScript` to a trusted local ESM module:
 

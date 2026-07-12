@@ -51,4 +51,12 @@ sameframe query-tree --page-id pricing--1440x900 --target candidate --text "Star
 
 After a fix, pass `--selector '[data-sameframe-key="pricing-grid"]'` to compare only the affected stable region. See the bundled [`sameframe` agent skill](skills/sameframe/SKILL.md) for the complete agent workflow and canonical JSON schemas.
 
+For authenticated routes, configure `authProfile` and ask a human to create managed state outside the repository:
+
+```bash
+sameframe auth login --config ./sameframe.yaml --target candidate
+```
+
+See [Authenticate pages](docs/guides/authenticated-pages.md) for repository scoping, storage locations, cleanup, and CI alternatives.
+
 Exit codes are `0` pass, `1` parity failure, `2` invalid configuration, `3` incomplete capture/comparison, and `4` internal failure.
