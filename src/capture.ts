@@ -46,9 +46,10 @@ async function serialize(
   target: Target,
   ignored: string[],
   textRules: { pattern: string; replacement: string }[],
+  rootSelector?: string,
 ): Promise<UiNode> {
   return page.evaluate(
-    ({ target, ignored, textRules }) => {
+    ({ target, ignored, textRules, rootSelector }) => {
       const retained = [
         'alt',
         'title',
@@ -103,7 +104,21 @@ async function serialize(
             .map((node) => node.textContent ?? '')
             .join(' '),
         )
-        const role = element.getAttribute('role') ?? undefined
+        const implicitRoles: Record<string, string> = {
+          A: 'link',
+          BUTTON: 'button',
+          H1: 'heading',
+          H2: 'heading',
+          H3: 'heading',
+          H4: 'heading',
+          H5: 'heading',
+          H6: 'heading',
+          IMG: 'img',
+          MAIN: 'main',
+          NAV: 'navigation',
+          FORM: 'form',
+        }
+        const role = element.getAttribute('role') ?? implicitRoles[element.tagName]
         const accessibleName =
           normalize(
             element.getAttribute('aria-label') ??
@@ -173,9 +188,11 @@ async function serialize(
         if (file || line || column || component) node.source = { file, line, column, component }
         return node
       }
-      return walk(document.documentElement, 'html')!
+      const root = rootSelector ? document.querySelector(rootSelector) : document.documentElement
+      if (!root) throw new Error(`Selector did not match: ${rootSelector}`)
+      return walk(root, rootSelector ?? 'html')!
     },
-    { target, ignored, textRules },
+    { target, ignored, textRules, rootSelector },
   )
 }
 
@@ -282,15 +299,17 @@ export async function captureTarget(
       target,
       job.config.ignore?.selectors ?? [],
       job.config.normalize?.text ?? [],
+      job.selector,
     )
-    await page.screenshot({
+    const screenshotOptions = {
       path: paths.screenshot,
-      fullPage: true,
-      animations: 'disabled',
-      caret: 'hide',
+      animations: 'disabled' as const,
+      caret: 'hide' as const,
       mask: (job.config.screenshot?.maskSelectors ?? []).map((selector) => page.locator(selector)),
       maskColor: '#ff00ff',
-    })
+    }
+    if (job.selector) await page.locator(job.selector).screenshot(screenshotOptions)
+    else await page.screenshot({ ...screenshotOptions, fullPage: true })
     const artifact: PageArtifact = {
       schemaVersion: '1.0.0',
       target,

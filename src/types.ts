@@ -44,6 +44,7 @@ export interface ComparisonJob {
   viewport: Viewport
   output: string
   config: SameframeConfig
+  selector?: string
 }
 
 export interface CliResult {
@@ -127,4 +128,33 @@ export interface PageArtifact {
   stabilized: boolean
   diagnostics: Diagnostic[]
   metadata: Record<string, unknown>
+}
+
+export interface NodeMatch {
+  referenceNodeId: string
+  candidateNodeId: string
+  confidence: number
+  signals: string[]
+  alternatives?: { candidateNodeId: string; confidence: number }[]
+}
+
+export interface AgentAction {
+  command: string
+  arguments: Record<string, string | number | boolean>
+  reason: string
+}
+export interface Finding {
+  id: string
+  category: 'missing' | 'extra' | 'content' | 'semantic' | 'layout' | 'style' | 'visual' | 'runtime'
+  severity: 'critical' | 'high' | 'medium' | 'low'
+  confidence: number
+  message: string
+  referenceNodeId?: string
+  candidateNodeId?: string
+  referenceValue?: unknown
+  candidateValue?: unknown
+  region?: Bounds
+  source?: SourceMetadata
+  evidenceBundle: string
+  suggestedActions?: AgentAction[]
 }

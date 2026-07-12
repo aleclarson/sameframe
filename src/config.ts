@@ -93,7 +93,17 @@ export function expandConfig(config: SameframeConfig): ComparisonJob[] {
 }
 
 export function configHash(config: SameframeConfig): string {
+  const sort = (value: unknown): unknown =>
+    Array.isArray(value)
+      ? value.map(sort)
+      : value && typeof value === 'object'
+        ? Object.fromEntries(
+            Object.entries(value)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([key, child]) => [key, sort(child)]),
+          )
+        : value
   return createHash('sha256')
-    .update(JSON.stringify(config, Object.keys(config).sort()))
+    .update(JSON.stringify(sort(config)))
     .digest('hex')
 }
