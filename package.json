@@ -17,6 +17,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsdown --sourcemap --watch",
+    "docs:build": "lildocs build ./docs --out ./dist/docs",
+    "docs:dev": "lildocs dev ./docs",
     "build": "tsdown",
     "format": "oxfmt .",
     "lint": "oxlint src test",
