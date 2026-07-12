@@ -63,3 +63,68 @@ export interface CliResult {
   diagnostics: unknown[]
   artifacts: Record<string, string>
 }
+
+export interface Bounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+export interface SourceMetadata {
+  file?: string
+  line?: number
+  column?: number
+  component?: string
+}
+export interface UiNode {
+  nodeId: string
+  tag: string
+  role?: string
+  accessibleName?: string
+  text?: string
+  directText?: string
+  attributes?: Record<string, string>
+  classes?: string[]
+  bounds?: Bounds
+  style?: Record<string, string>
+  state: {
+    visible: boolean
+    disabled?: boolean
+    checked?: boolean
+    selected?: boolean
+    expanded?: boolean
+  }
+  source?: SourceMetadata
+  selector: string
+  computedStyle: Record<string, string>
+  children: UiNode[]
+}
+
+export interface Diagnostic {
+  type:
+    | 'console'
+    | 'page-error'
+    | 'request-failed'
+    | 'asset-failed'
+    | 'hydration'
+    | 'navigation'
+    | 'setup'
+  message: string
+  severity: 'critical' | 'high' | 'medium' | 'low'
+  url?: string
+  status?: number
+  resourceType?: string
+}
+
+export interface PageArtifact {
+  schemaVersion: '1.0.0'
+  target: 'reference' | 'candidate'
+  requestedUrl: string
+  finalUrl?: string
+  navigationStatus?: number
+  navigationDurationMs: number
+  redirects: string[]
+  stabilized: boolean
+  diagnostics: Diagnostic[]
+  metadata: Record<string, unknown>
+}

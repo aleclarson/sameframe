@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
 import { resolve } from 'node:path'
+import { captureJob } from './capture.js'
 import { expandConfig, loadConfig, parseViewport, validateConfig } from './config.js'
 import type { SameframeConfig } from './types.js'
 
@@ -44,18 +45,21 @@ async function main(): Promise<number> {
     config = {
       reference: { baseUrl: values.reference },
       candidate: { baseUrl: values.candidate },
-      routes: [{ path: '/' }],
+      routes: [{ referencePath: values.reference, candidatePath: values.candidate }],
       viewports: [values.viewport ? parseViewport(values.viewport) : { width: 1440, height: 900 }],
       output: resolve(values.output),
     }
     validateConfig(config)
   }
   const jobs = expandConfig(config)
-  // Capture is introduced by the next contract commit. Keep this output useful for contract tests.
-  const result = {
-    schemaVersion: '1.0.0',
-    jobs: jobs.map(({ config: _, ...job }) => job),
-    selector: values.selector,
+  const result = []
+  for (const job of jobs) {
+    const captures = await captureJob(job)
+    result.push({
+      pageId: job.pageId,
+      reference: captures.reference.page,
+      candidate: captures.candidate.page,
+    })
   }
   console.log(JSON.stringify(result, null, values.json ? undefined : 2))
   return 0

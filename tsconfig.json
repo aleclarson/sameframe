@@ -4,7 +4,7 @@
     "strict": true,
     "erasableSyntaxOnly": true,
     "noUncheckedSideEffectImports": true,
-    "lib": ["esnext"],
+    "lib": ["esnext", "dom"],
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
