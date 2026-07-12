@@ -5,6 +5,7 @@ import { PNG } from 'pngjs'
 import { captureJob } from './capture.js'
 import { comparisonPaths, targetPaths, writeJson } from './artifacts.js'
 import { defaults } from './config.js'
+import { validateSchema } from './schemas.js'
 import type { Bounds, CliResult, ComparisonJob, Finding, NodeMatch, UiNode } from './types.js'
 
 const flatten = (root: UiNode): UiNode[] => [root, ...root.children.flatMap(flatten)]
@@ -407,6 +408,22 @@ export async function compareJob(job: ComparisonJob): Promise<CliResult> {
     findings.push(
       finding('runtime', 'critical', 'Capture did not produce comparable page evidence.'),
     )
+  const hasMainContent = (tree?: UiNode) =>
+    Boolean(
+      tree &&
+      flatten(tree).some(
+        (node) =>
+          node.state.visible &&
+          (node.tag === 'main' ||
+            node.role === 'main' ||
+            Boolean(node.text) ||
+            ['img', 'input', 'button'].includes(node.tag)),
+      ),
+    )
+  const mainContentPresent =
+    hasMainContent(captures.reference.tree) && hasMainContent(captures.candidate.tree)
+  if (captures.reference.tree && captures.candidate.tree && !mainContentPresent)
+    findings.push(finding('missing', 'critical', 'Main page content is absent.'))
   for (const [index, item] of findings.entries()) {
     item.id = `finding-${index + 1}`
     const bundle = join(job.output, 'findings', item.id)
@@ -435,6 +452,8 @@ export async function compareJob(job: ComparisonJob): Promise<CliResult> {
         flatten(captures.candidate.tree).find((node) => node.nodeId === item.candidateNodeId),
       )
   }
+  await validateSchema('matches', matches)
+  await validateSchema('findings', findings)
   await writeJson(paths.matches, matches)
   await writeJson(paths.findings, findings)
   const counts = {
@@ -463,9 +482,7 @@ export async function compareJob(job: ComparisonJob): Promise<CliResult> {
     summary: `${findings.length} finding(s): ${counts.critical} critical, ${counts.high} high, ${counts.medium} medium, ${counts.low} low.`,
     assertions: {
       pageRendered,
-      mainContentPresent:
-        pageRendered &&
-        !findings.some((item) => item.category === 'missing' && item.severity === 'high'),
+      mainContentPresent,
       criticalContentMatches,
       layoutWithinTolerance,
       runtimeHealthy,
@@ -484,6 +501,7 @@ export async function compareJob(job: ComparisonJob): Promise<CliResult> {
       fullComparison: relative(job.output, paths.result),
     },
   }
+  await validateSchema('comparison-result', result)
   await writeJson(paths.result, result)
   return result
 }

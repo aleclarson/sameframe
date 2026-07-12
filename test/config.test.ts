@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { expandConfig, parseViewport } from '../src/config.js'
+import { validateSchema } from '../src/schemas.js'
 
 describe('configuration', () => {
   test('parses viewports', () =>
@@ -17,5 +18,22 @@ describe('configuration', () => {
     })
     expect(jobs).toHaveLength(2)
     expect(jobs[0]?.pageId).toBe('pricing--390x844')
+  })
+
+  test('validates versioned matrix output', async () => {
+    const result = {
+      schemaVersion: '1.0.0',
+      pageId: 'root--800x600',
+      status: 'pass',
+      summary: 'No findings.',
+      assertions: {},
+      counts: {},
+      findings: [],
+      diagnostics: [],
+      artifacts: {},
+    }
+    await expect(
+      validateSchema('comparison-batch', { schemaVersion: '1.0.0', results: [result] }),
+    ).resolves.toBeUndefined()
   })
 })

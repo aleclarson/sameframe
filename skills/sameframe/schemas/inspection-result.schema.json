@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sameframe.dev/schemas/inspection-result/1.0.0",
+  "type": "object",
+  "required": ["schemaVersion", "command", "pageId", "result"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "command": {
+      "enum": ["inspect-page", "inspect-node", "query-tree", "get-subtree", "inspect-finding"]
+    },
+    "pageId": { "type": "string" },
+    "result": {}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Sameframe'
+  short_description: 'Find and verify UI migration regressions'
+  default_prompt: 'Use $sameframe to compare a migrated page with its reference and inspect actionable parity evidence.'

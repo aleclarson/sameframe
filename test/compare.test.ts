@@ -41,6 +41,16 @@ describe('matching', () => {
     const result = matchTrees(node('ref', 'Pricing'), candidate)
     expect(result.matches).toHaveLength(0)
   })
+
+  test('reports low-confidence alternatives explicitly', () => {
+    const candidate = {
+      ...node('cand', 'Plans'),
+      selector: 'html>body:nth-child(2)>h1:nth-child(2)',
+    }
+    const result = matchTrees(node('ref', 'Pricing'), candidate, 0.9, 0.3)
+    expect(result.matches).toHaveLength(0)
+    expect(result.uncertain[0]?.alternatives[0]?.node.nodeId).toBe('cand-1')
+  })
 })
 
 describe('comparison', () => {
@@ -74,6 +84,68 @@ describe('comparison', () => {
       expect(
         (await inspectNode(output, 'candidate', headings[0]!.nodeId)).ancestors.length,
       ).toBeGreaterThan(0)
+    } finally {
+      await rm(output, { recursive: true, force: true })
+    }
+  }, 15_000)
+
+  test('finds changed source-mapped content and a missing CTA', async () => {
+    const output = await mkdtemp(join(tmpdir(), 'sameframe-regression-'))
+    try {
+      const referenceUrl = `data:text/html,${encodeURIComponent('<main><h1>Pricing</h1><button>Start free trial</button></main>')}`
+      const candidateUrl = `data:text/html,${encodeURIComponent('<main><h1 data-ui-source-file="src/Pricing.tsx" data-ui-source-line="12">Plans</h1></main>')}`
+      const config: SameframeConfig = {
+        reference: { baseUrl: referenceUrl },
+        candidate: { baseUrl: candidateUrl },
+        routes: [{ path: '/' }],
+        output,
+        capture: { waitUntil: 'load', stabilizationTimeoutMs: 1_000 },
+      }
+      const result = await compareJob({
+        pageId: 'pricing--800x600',
+        referenceUrl,
+        candidateUrl,
+        viewport: { width: 800, height: 600 },
+        output,
+        config,
+      })
+      expect(result.status).toBe('fail')
+      expect(result.findings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            category: 'content',
+            source: expect.objectContaining({ file: 'src/Pricing.tsx' }),
+          }),
+          expect.objectContaining({ category: 'missing', severity: 'high' }),
+        ]),
+      )
+    } finally {
+      await rm(output, { recursive: true, force: true })
+    }
+  }, 15_000)
+
+  test('suppresses ignored dynamic content in trees and screenshots', async () => {
+    const output = await mkdtemp(join(tmpdir(), 'sameframe-ignore-'))
+    try {
+      const referenceUrl = `data:text/html,${encodeURIComponent('<main><h1>Dashboard</h1><p class="timestamp">10:30</p></main>')}`
+      const candidateUrl = `data:text/html,${encodeURIComponent('<main><h1>Dashboard</h1><p class="timestamp">11:45</p></main>')}`
+      const config: SameframeConfig = {
+        reference: { baseUrl: referenceUrl },
+        candidate: { baseUrl: candidateUrl },
+        routes: [{ path: '/' }],
+        output,
+        ignore: { selectors: ['.timestamp'] },
+        capture: { waitUntil: 'load', stabilizationTimeoutMs: 1_000 },
+      }
+      const result = await compareJob({
+        pageId: 'dashboard--800x600',
+        referenceUrl,
+        candidateUrl,
+        viewport: { width: 800, height: 600 },
+        output,
+        config,
+      })
+      expect(result.status).toBe('pass')
     } finally {
       await rm(output, { recursive: true, force: true })
     }

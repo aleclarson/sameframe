@@ -11,7 +11,8 @@ import {
   inspectPage,
   queryTree,
 } from './inspect.js'
-import type { SameframeConfig } from './types.js'
+import { validateSchema } from './schemas.js'
+import type { CliResult, SameframeConfig } from './types.js'
 
 export const version = '0.0.0'
 
@@ -76,14 +77,39 @@ async function main(): Promise<number> {
     ]
   }
   jobs ??= expandConfig(config)
-  const result = []
+  const result: CliResult[] = []
+  let internalFailure = false
   for (const job of jobs) {
     job.selector = values.selector
-    result.push(await compareJob(job))
+    try {
+      result.push(await compareJob(job))
+    } catch (error) {
+      internalFailure = true
+      result.push({
+        schemaVersion: '1.0.0',
+        pageId: job.pageId,
+        status: 'error',
+        summary: 'Sameframe encountered an internal comparison failure.',
+        assertions: {
+          pageRendered: false,
+          mainContentPresent: false,
+          criticalContentMatches: false,
+          layoutWithinTolerance: false,
+          runtimeHealthy: false,
+        },
+        counts: { critical: 1, high: 0, medium: 0, low: 0 },
+        findings: [],
+        diagnostics: [
+          { type: 'internal', message: error instanceof Error ? error.message : String(error) },
+        ],
+        artifacts: {},
+      })
+    }
   }
-  console.log(
-    JSON.stringify(result.length === 1 ? result[0] : result, null, values.json ? undefined : 2),
-  )
+  const output = result.length === 1 ? result[0] : { schemaVersion: '1.0.0', results: result }
+  await validateSchema(result.length === 1 ? 'comparison-result' : 'comparison-batch', output)
+  console.log(JSON.stringify(output, null, values.json ? undefined : 2))
+  if (internalFailure) return 4
   if (result.some((item) => item.status === 'error')) return 3
   if (result.some((item) => item.status === 'fail')) return 1
   return 0
@@ -161,7 +187,9 @@ async function inspectCommand(command: string, args: string[]): Promise<number> 
       })
     }
   }
-  console.log(JSON.stringify(result, null, 2))
+  const output = { schemaVersion: '1.0.0', command, pageId, result }
+  await validateSchema('inspection-result', output)
+  console.log(JSON.stringify(output, null, 2))
   return 0
 }
 

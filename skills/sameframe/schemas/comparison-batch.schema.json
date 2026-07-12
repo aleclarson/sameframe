@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sameframe.dev/schemas/comparison-batch/1.0.0",
+  "type": "object",
+  "required": ["schemaVersion", "results"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "results": {
+      "type": "array",
+      "items": { "$ref": "https://sameframe.dev/schemas/comparison-result/1.0.0" }
+    }
+  },
+  "additionalProperties": false
+}

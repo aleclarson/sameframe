@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
 import { targetPaths, writeJson } from './artifacts.js'
 import { configHash, defaults } from './config.js'
+import { validateSchema } from './schemas.js'
 import type { ComparisonJob, Diagnostic, PageArtifact, UiNode } from './types.js'
 
 type Target = 'reference' | 'candidate'
@@ -83,7 +84,6 @@ async function serialize(
           ignored.some((value) => element.matches(value))
         )
           return undefined
-        const html = element as HTMLElement
         const style = getComputedStyle(element)
         const rect = element.getBoundingClientRect()
         const visible =
@@ -97,13 +97,13 @@ async function serialize(
             walk(child, `${selector}>${child.tagName.toLowerCase()}:nth-child(${childIndex + 1})`),
           )
           .filter((node): node is UiNode => Boolean(node))
-        const text = normalize(html.innerText ?? '')
         const directText = normalize(
           Array.from(element.childNodes)
             .filter((node) => node.nodeType === Node.TEXT_NODE)
             .map((node) => node.textContent ?? '')
             .join(' '),
         )
+        const text = normalize([directText, ...children.map((child) => child.text ?? '')].join(' '))
         const implicitRoles: Record<string, string> = {
           A: 'link',
           BUTTON: 'button',
@@ -305,7 +305,10 @@ export async function captureTarget(
       path: paths.screenshot,
       animations: 'disabled' as const,
       caret: 'hide' as const,
-      mask: (job.config.screenshot?.maskSelectors ?? []).map((selector) => page.locator(selector)),
+      mask: [
+        ...(job.config.ignore?.selectors ?? []),
+        ...(job.config.screenshot?.maskSelectors ?? []),
+      ].map((selector) => page.locator(selector)),
       maskColor: '#ff00ff',
     }
     if (job.selector) await page.locator(job.selector).screenshot(screenshotOptions)
@@ -333,6 +336,8 @@ export async function captureTarget(
         screenshot: job.config.screenshot ?? {},
       },
     }
+    await validateSchema('ui-tree', tree)
+    await validateSchema('page', artifact)
     await writeJson(paths.tree, tree)
     await writeJson(paths.page, artifact)
     return { target, page: artifact, tree, screenshot: paths.screenshot }
@@ -361,6 +366,7 @@ export async function captureTarget(
         configHash: configHash(job.config),
       },
     }
+    await validateSchema('page', artifact)
     await writeJson(targetPaths(job.output, target).page, artifact)
     return { target, page: artifact, error: error instanceof Error ? error.message : String(error) }
   } finally {
