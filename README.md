@@ -1,0 +1,5 @@
+# sameframe
+
+```
+pnpm add sameframe
+```
