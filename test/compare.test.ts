@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { ComparisonJob, SameframeConfig, UiNode } from '../src/types.js'
 import { describe, expect, test } from 'vitest'
 import { compareJob, matchTrees } from '../src/compare.js'
+import { findPageRoot, getSubtree, inspectNode, inspectPage, queryTree } from '../src/inspect.js'
 
 function node(target: 'ref' | 'cand', text: string): UiNode {
   return {
@@ -65,6 +66,14 @@ describe('comparison', () => {
       const result = await compareJob(job)
       expect(result.status).toBe('pass')
       expect(result.counts).toEqual({ critical: 0, high: 0, medium: 0, low: 0 })
+      expect(await findPageRoot(result.pageId, output)).toBe(output)
+      expect(await inspectPage(output, 'summary')).toMatchObject({ status: 'pass' })
+      const headings = await queryTree(output, 'candidate', { role: 'heading' })
+      expect(headings[0]?.text).toBe('Pricing')
+      expect((await getSubtree(output, 'candidate', headings[0]!.nodeId, 0)).children).toEqual([])
+      expect(
+        (await inspectNode(output, 'candidate', headings[0]!.nodeId)).ancestors.length,
+      ).toBeGreaterThan(0)
     } finally {
       await rm(output, { recursive: true, force: true })
     }

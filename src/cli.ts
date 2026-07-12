@@ -3,6 +3,14 @@ import { parseArgs } from 'node:util'
 import { resolve } from 'node:path'
 import { compareJob } from './compare.js'
 import { expandConfig, loadConfig, parseViewport, validateConfig } from './config.js'
+import {
+  findPageRoot,
+  getSubtree,
+  inspectFinding,
+  inspectNode,
+  inspectPage,
+  queryTree,
+} from './inspect.js'
 import type { SameframeConfig } from './types.js'
 
 export const version = '0.0.0'
@@ -23,7 +31,7 @@ async function main(): Promise<number> {
     console.log(version)
     return 0
   }
-  if (command !== 'compare') throw new Error(`Unknown command: ${command}`)
+  if (command !== 'compare') return inspectCommand(command, args)
   const { values } = parseArgs({
     args,
     options: {
@@ -78,6 +86,82 @@ async function main(): Promise<number> {
   )
   if (result.some((item) => item.status === 'error')) return 3
   if (result.some((item) => item.status === 'fail')) return 1
+  return 0
+}
+
+async function inspectCommand(command: string, args: string[]): Promise<number> {
+  const common = {
+    'page-id': { type: 'string' as const },
+    output: { type: 'string' as const },
+    target: { type: 'string' as const },
+  }
+  const options =
+    command === 'inspect-page'
+      ? { ...common, format: { type: 'string' as const, default: 'summary' } }
+      : command === 'inspect-node'
+        ? { ...common, 'node-id': { type: 'string' as const } }
+        : command === 'get-subtree'
+          ? {
+              ...common,
+              'node-id': { type: 'string' as const },
+              depth: { type: 'string' as const, default: '3' },
+            }
+          : command === 'inspect-finding'
+            ? { ...common, 'finding-id': { type: 'string' as const } }
+            : command === 'query-tree'
+              ? {
+                  ...common,
+                  'node-id': { type: 'string' as const },
+                  text: { type: 'string' as const },
+                  role: { type: 'string' as const },
+                  tag: { type: 'string' as const },
+                  selector: { type: 'string' as const },
+                  'test-id': { type: 'string' as const },
+                  'parity-key': { type: 'string' as const },
+                  'source-file': { type: 'string' as const },
+                  region: { type: 'string' as const },
+                }
+              : undefined
+  if (!options) throw new Error(`Unknown command: ${command}`)
+  const parsed = parseArgs({ args, options, strict: true })
+  const values = parsed.values as Record<string, string | undefined>
+  const pageId = values['page-id']
+  if (!pageId) throw new Error(`${command} requires --page-id`)
+  const root = await findPageRoot(pageId, values.output)
+  let result: unknown
+  if (command === 'inspect-page') result = await inspectPage(root, values.format ?? 'summary')
+  else if (command === 'inspect-finding') {
+    if (!values['finding-id']) throw new Error('inspect-finding requires --finding-id')
+    result = await inspectFinding(root, values['finding-id'])
+  } else {
+    const target = values.target
+    if (target !== 'reference' && target !== 'candidate')
+      throw new Error(`${command} requires --target reference|candidate`)
+    if (command === 'inspect-node') {
+      if (!values['node-id']) throw new Error('inspect-node requires --node-id')
+      result = await inspectNode(root, target, values['node-id'])
+    } else if (command === 'get-subtree') {
+      if (!values['node-id']) throw new Error('get-subtree requires --node-id')
+      result = await getSubtree(root, target, values['node-id'], Number(values.depth ?? 3))
+    } else {
+      const region = values.region?.split(',').map(Number)
+      result = await queryTree(root, target, {
+        nodeId: values['node-id'],
+        text: values.text,
+        role: values.role,
+        tag: values.tag,
+        selector: values.selector,
+        testId: values['test-id'],
+        parityKey: values['parity-key'],
+        sourceFile: values['source-file'],
+        region:
+          region?.length === 4 && region.every(Number.isFinite)
+            ? { x: region[0]!, y: region[1]!, width: region[2]!, height: region[3]! }
+            : undefined,
+      })
+    }
+  }
+  console.log(JSON.stringify(result, null, 2))
   return 0
 }
 
