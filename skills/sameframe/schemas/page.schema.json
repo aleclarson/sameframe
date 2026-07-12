@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sameframe.dev/schemas/page/1.0.0",
+  "type": "object",
+  "required": ["schemaVersion", "target", "requestedUrl", "diagnostics", "metadata"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "target": { "enum": ["reference", "candidate"] },
+    "requestedUrl": { "type": "string" },
+    "finalUrl": { "type": "string" },
+    "navigationStatus": { "type": "integer" },
+    "navigationDurationMs": { "type": "number" },
+    "redirects": { "type": "array" },
+    "stabilized": { "type": "boolean" },
+    "diagnostics": { "type": "array" },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": true
+}

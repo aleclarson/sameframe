@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sameframe.dev/schemas/comparison-result/1.0.0",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "pageId",
+    "status",
+    "summary",
+    "assertions",
+    "counts",
+    "findings",
+    "diagnostics",
+    "artifacts"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "pageId": { "type": "string" },
+    "status": { "enum": ["pass", "review", "fail", "error"] },
+    "summary": { "type": "string" },
+    "assertions": { "type": "object" },
+    "counts": { "type": "object" },
+    "findings": { "type": "array" },
+    "diagnostics": { "type": "array" },
+    "artifacts": { "type": "object" }
+  },
+  "additionalProperties": false
+}

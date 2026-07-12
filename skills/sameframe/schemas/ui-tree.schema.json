@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sameframe.dev/schemas/ui-tree/1.0.0",
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": ["nodeId", "tag", "state", "children"],
+      "properties": {
+        "nodeId": { "type": "string" },
+        "tag": { "type": "string" },
+        "role": { "type": "string" },
+        "accessibleName": { "type": "string" },
+        "text": { "type": "string" },
+        "directText": { "type": "string" },
+        "attributes": { "type": "object" },
+        "classes": { "type": "array", "items": { "type": "string" } },
+        "bounds": { "type": "object" },
+        "style": { "type": "object" },
+        "state": { "type": "object", "required": ["visible"] },
+        "source": { "type": "object" },
+        "selector": { "type": "string" },
+        "computedStyle": { "type": "object" },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/node" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/node"
+}

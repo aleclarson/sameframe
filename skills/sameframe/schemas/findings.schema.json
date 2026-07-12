@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sameframe.dev/schemas/findings/1.0.0",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "category", "severity", "confidence", "message", "evidenceBundle"],
+    "properties": {
+      "id": { "type": "string" },
+      "category": {
+        "enum": ["missing", "extra", "content", "semantic", "layout", "style", "visual", "runtime"]
+      },
+      "severity": { "enum": ["critical", "high", "medium", "low"] },
+      "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+      "message": { "type": "string" },
+      "evidenceBundle": { "type": "string" }
+    },
+    "additionalProperties": true
+  }
+}

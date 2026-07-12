@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sameframe.dev/schemas/matches/1.0.0",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["referenceNodeId", "candidateNodeId", "confidence", "signals"],
+    "properties": {
+      "referenceNodeId": { "type": "string" },
+      "candidateNodeId": { "type": "string" },
+      "confidence": { "type": "number" },
+      "signals": { "type": "array", "items": { "type": "string" } },
+      "alternatives": { "type": "array" }
+    },
+    "additionalProperties": false
+  }
+}
