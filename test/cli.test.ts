@@ -1,5 +1,8 @@
-import { dryRun, parse } from 'cmd-ts'
-import { describe, expect, test } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { dryRun, parse, run } from 'cmd-ts'
+import { describe, expect, test, vi } from 'vitest'
 import { app } from '../src/cli-app.js'
 
 describe('CLI parsing', () => {
@@ -72,4 +75,38 @@ describe('CLI parsing', () => {
       },
     })
   })
+
+  test('returns structured JSON and the documented failure code for a scoped comparison', async () => {
+    const output = await mkdtemp(join(tmpdir(), 'sameframe-cli-region-'))
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      const reference = `data:text/html,${encodeURIComponent('<main style="margin: 700px 0 0 600px"><header style="width: 100px; height: 40px"><h1>Dashboard</h1></header></main>')}`
+      const candidate = `data:text/html,${encodeURIComponent('<main style="margin: 700px 0 0 600px"><header style="width: 100px; height: 40px"><h1>Overview</h1></header></main>')}`
+      const result = await run(app, [
+        'compare',
+        '--reference',
+        reference,
+        '--candidate',
+        candidate,
+        '--viewport',
+        '800x600',
+        '--selector',
+        'main > header',
+        '--output',
+        output,
+        '--json',
+      ])
+      const json = JSON.parse(String(log.mock.calls.at(-1)?.[0]))
+
+      expect(result).toMatchObject({ command: 'compare', value: 1 })
+      expect(json).toMatchObject({ status: 'fail' })
+      expect(json.summary).not.toBe('Sameframe encountered an internal comparison failure.')
+      expect(json.diagnostics).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ type: 'internal' })]),
+      )
+    } finally {
+      log.mockRestore()
+      await rm(output, { recursive: true, force: true })
+    }
+  }, 15_000)
 })

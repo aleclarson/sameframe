@@ -12,7 +12,9 @@ const flatten = (root: UiNode): UiNode[] => [root, ...root.children.flatMap(flat
 const important = (node: UiNode) =>
   ['main', 'nav', 'header', 'h1', 'button', 'input', 'img', 'form'].includes(node.tag) ||
   ['button', 'heading', 'navigation', 'main'].includes(node.role ?? '')
-const label = (node: UiNode) => node.accessibleName || node.directText || node.text || node.tag
+const label = (node: UiNode) =>
+  node.accessibleName || (node.tag === 'svg' ? node.tag : node.directText || node.text || node.tag)
+const detailedEvidenceLimit = 100
 
 function score(reference: UiNode, candidate: UiNode): { confidence: number; signals: string[] } {
   const signals: string[] = []
@@ -94,11 +96,17 @@ export function matchTrees(
   const uncertain: { reference: UiNode; alternatives: { node: UiNode; confidence: number }[] }[] =
     []
   for (const reference of references) {
-    const ranked = candidates
-      .filter((candidate) => !used.has(candidate.nodeId))
-      .map((node) => ({ node, ...score(reference, node) }))
-      .filter(({ confidence }) => confidence >= low)
-      .sort((a, b) => b.confidence - a.confidence || a.node.nodeId.localeCompare(b.node.nodeId))
+    const ranked: { node: UiNode; confidence: number; signals: string[] }[] = []
+    for (const node of candidates) {
+      if (used.has(node.nodeId)) continue
+      const scored = score(reference, node)
+      if (scored.confidence < low) continue
+      ranked.push({ node, ...scored })
+      ranked.sort(
+        (a, b) => b.confidence - a.confidence || a.node.nodeId.localeCompare(b.node.nodeId),
+      )
+      if (ranked.length > 3) ranked.pop()
+    }
     const best = ranked[0]
     if (!best) continue
     if (best.confidence < high) {
@@ -119,25 +127,26 @@ export function matchTrees(
         .map(({ node, confidence }) => ({ candidateNodeId: node.nodeId, confidence })),
     })
   }
+  const matchedReferences = new Set(matches.map((match) => match.referenceNodeId))
+  const uncertainReferences = new Set(uncertain.map((item) => item.reference.nodeId))
   return {
     matches,
     uncertain,
     unmatchedReference: references.filter(
-      (node) =>
-        !matches.some((match) => match.referenceNodeId === node.nodeId) &&
-        !uncertain.some((item) => item.reference.nodeId === node.nodeId),
+      (node) => !matchedReferences.has(node.nodeId) && !uncertainReferences.has(node.nodeId),
     ),
     unmatchedCandidate: candidates.filter((node) => !used.has(node.nodeId)),
   }
 }
 
-async function crop(sourcePath: string, destination: string, bounds?: Bounds): Promise<void> {
-  if (!bounds) return
-  const image = PNG.sync.read(await readFile(sourcePath))
+async function crop(image: PNG | undefined, destination: string, bounds?: Bounds): Promise<void> {
+  if (!image || !bounds || bounds.width <= 0 || bounds.height <= 0) return
   const x = Math.max(0, Math.floor(bounds.x))
   const y = Math.max(0, Math.floor(bounds.y))
-  const width = Math.max(1, Math.min(image.width - x, Math.ceil(bounds.width)))
-  const height = Math.max(1, Math.min(image.height - y, Math.ceil(bounds.height)))
+  const right = Math.min(image.width, Math.ceil(bounds.x + bounds.width))
+  const bottom = Math.min(image.height, Math.ceil(bounds.y + bounds.height))
+  const width = right - x
+  const height = bottom - y
   if (width < 1 || height < 1) return
   const output = new PNG({ width, height })
   PNG.bitblt(image, output, x, y, width, height, 0, 0)
@@ -204,6 +213,8 @@ export async function compareJob(job: ComparisonJob): Promise<CliResult> {
   await mkdir(paths.directory, { recursive: true })
   const findings: Finding[] = []
   let matches: NodeMatch[] = []
+  let referenceNodes = new Map<string, UiNode>()
+  let candidateNodes = new Map<string, UiNode>()
   let visual = { changedPercent: 0, region: undefined as Bounds | undefined }
   for (const capture of [captures.reference, captures.candidate])
     for (const diagnostic of capture.page.diagnostics)
@@ -226,8 +237,8 @@ export async function compareJob(job: ComparisonJob): Promise<CliResult> {
       job.config.thresholds?.lowConfidence,
     )
     matches = outcome.matches
-    const ref = new Map(flatten(captures.reference.tree).map((node) => [node.nodeId, node]))
-    const cand = new Map(flatten(captures.candidate.tree).map((node) => [node.nodeId, node]))
+    referenceNodes = new Map(flatten(captures.reference.tree).map((node) => [node.nodeId, node]))
+    candidateNodes = new Map(flatten(captures.candidate.tree).map((node) => [node.nodeId, node]))
     for (const node of outcome.unmatchedReference)
       findings.push(
         finding(
@@ -266,15 +277,17 @@ export async function compareJob(job: ComparisonJob): Promise<CliResult> {
         }),
       )
     for (const match of matches) {
-      const a = ref.get(match.referenceNodeId)!
-      const b = cand.get(match.candidateNodeId)!
-      if (a.text !== b.text)
+      const a = referenceNodes.get(match.referenceNodeId)!
+      const b = candidateNodes.get(match.candidateNodeId)!
+      // `text` includes all descendants and would report one leaf change again at every ancestor.
+      // Compare the text owned by this node; descendants are evaluated through their own matches.
+      if (a.directText !== b.directText)
         findings.push(
           finding('content', important(a) ? 'high' : 'medium', `Text differs for ${label(a)}.`, {
             referenceNodeId: a.nodeId,
             candidateNodeId: b.nodeId,
-            referenceValue: a.text,
-            candidateValue: b.text,
+            referenceValue: a.directText,
+            candidateValue: b.directText,
             region: b.bounds,
             source: b.source,
             confidence: match.confidence,
@@ -424,6 +437,29 @@ export async function compareJob(job: ComparisonJob): Promise<CliResult> {
     hasMainContent(captures.reference.tree) && hasMainContent(captures.candidate.tree)
   if (captures.reference.tree && captures.candidate.tree && !mainContentPresent)
     findings.push(finding('missing', 'critical', 'Main page content is absent.'))
+
+  const severityRank: Record<Finding['severity'], number> = {
+    critical: 4,
+    high: 3,
+    medium: 2,
+    low: 1,
+  }
+  // Full trees and screenshots remain authoritative. Limit eagerly materialized crops and node
+  // snapshots so a repeated structure cannot multiply large binary and recursive artifacts.
+  const detailedEvidence = new Set(
+    findings
+      .map((item, index) => ({ index, severity: item.severity }))
+      .sort((a, b) => severityRank[b.severity] - severityRank[a.severity] || a.index - b.index)
+      .slice(0, detailedEvidenceLimit)
+      .map(({ index }) => index),
+  )
+  const loadScreenshot = async (path?: string) =>
+    path && detailedEvidence.size ? PNG.sync.read(await readFile(path)) : undefined
+  const [referenceScreenshot, candidateScreenshot] = await Promise.all([
+    loadScreenshot(captures.reference.screenshot),
+    loadScreenshot(captures.candidate.screenshot),
+  ])
+  const compactNode = (node: UiNode) => ({ ...node, computedStyle: {}, children: [] })
   for (const [index, item] of findings.entries()) {
     item.id = `finding-${index + 1}`
     const bundle = join(job.output, 'findings', item.id)
@@ -437,20 +473,17 @@ export async function compareJob(job: ComparisonJob): Promise<CliResult> {
       },
     ]
     await writeJson(join(bundle, 'finding.json'), item)
-    if (captures.reference.screenshot)
-      await crop(captures.reference.screenshot, join(bundle, 'reference-crop.png'), item.region)
-    if (captures.candidate.screenshot)
-      await crop(captures.candidate.screenshot, join(bundle, 'candidate-crop.png'), item.region)
-    if (item.referenceNodeId && captures.reference.tree)
-      await writeJson(
-        join(bundle, 'reference-subtree.json'),
-        flatten(captures.reference.tree).find((node) => node.nodeId === item.referenceNodeId),
-      )
-    if (item.candidateNodeId && captures.candidate.tree)
-      await writeJson(
-        join(bundle, 'candidate-subtree.json'),
-        flatten(captures.candidate.tree).find((node) => node.nodeId === item.candidateNodeId),
-      )
+    if (!detailedEvidence.has(index)) continue
+    await crop(referenceScreenshot, join(bundle, 'reference-crop.png'), item.region)
+    await crop(candidateScreenshot, join(bundle, 'candidate-crop.png'), item.region)
+    if (item.referenceNodeId) {
+      const node = referenceNodes.get(item.referenceNodeId)
+      if (node) await writeJson(join(bundle, 'reference-subtree.json'), compactNode(node))
+    }
+    if (item.candidateNodeId) {
+      const node = candidateNodes.get(item.candidateNodeId)
+      if (node) await writeJson(join(bundle, 'candidate-subtree.json'), compactNode(node))
+    }
   }
   await validateSchema('matches', matches)
   await validateSchema('findings', findings)

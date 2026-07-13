@@ -78,6 +78,37 @@ async function serialize(
         return result
       }
       const color = (value: string) => value.replace(/\s+/g, ' ')
+      const root = rootSelector ? document.querySelector(rootSelector) : document.documentElement
+      if (!root) throw new Error(`Selector did not match: ${rootSelector}`)
+      const rootRect = root.getBoundingClientRect()
+      // Selector screenshots use an element-local coordinate space. Keep serialized bounds in
+      // that same space so findings and later inspection crops address the captured pixels.
+      const origin = rootSelector
+        ? { x: rootRect.x + scrollX, y: rootRect.y + scrollY }
+        : { x: 0, y: 0 }
+      const svgContainers = new Set([
+        'a',
+        'desc',
+        'foreignobject',
+        'g',
+        'svg',
+        'switch',
+        'text',
+        'title',
+        'tspan',
+      ])
+      const hasExplicitSvgSignal = (element: Element) =>
+        Array.from(element.attributes).some(
+          (attribute) =>
+            attribute.name === 'role' ||
+            attribute.name === 'title' ||
+            attribute.name === 'tabindex' ||
+            attribute.name === 'href' ||
+            attribute.name === 'data-testid' ||
+            attribute.name === 'data-test' ||
+            attribute.name === 'data-sameframe-key' ||
+            attribute.name.startsWith('aria-'),
+        )
       let index = 0
       const walk = (element: Element, selector: string): UiNode | undefined => {
         if (
@@ -85,6 +116,14 @@ async function serialize(
           ignored.some((value) => element.matches(value))
         )
           return undefined
+        const tag = element.tagName.toLowerCase()
+        const svgDescendant =
+          element !== root && element.namespaceURI === 'http://www.w3.org/2000/svg'
+        const explicitSvgSignal = hasExplicitSvgSignal(element)
+        // Dense charts and calendars often contain hundreds of purely graphical SVG primitives.
+        // The screenshot preserves their pixels; only explicitly addressable primitives belong in
+        // the semantic tree and finding pipeline.
+        if (svgDescendant && !svgContainers.has(tag) && !explicitSvgSignal) return undefined
         const style = getComputedStyle(element)
         const rect = element.getBoundingClientRect()
         const visible =
@@ -98,12 +137,34 @@ async function serialize(
             walk(child, `${selector}>${child.tagName.toLowerCase()}:nth-child(${childIndex + 1})`),
           )
           .filter((node): node is UiNode => Boolean(node))
-        const directText = normalize(
+        const literalDirectText = normalize(
           Array.from(element.childNodes)
             .filter((node) => node.nodeType === Node.TEXT_NODE)
             .map((node) => node.textContent ?? '')
             .join(' '),
         )
+        const collapsedSvgText =
+          tag === 'svg'
+            ? normalize(
+                Array.from(element.querySelectorAll('title, desc'))
+                  .filter((description) => {
+                    const owner = description.parentElement
+                    return (
+                      owner &&
+                      owner !== element &&
+                      owner.namespaceURI === 'http://www.w3.org/2000/svg' &&
+                      !svgContainers.has(owner.tagName.toLowerCase()) &&
+                      !hasExplicitSvgSignal(owner) &&
+                      owner.closest('svg') === element
+                    )
+                  })
+                  .map((description) => description.textContent ?? '')
+                  .join(' '),
+              )
+            : ''
+        // Preserve one region-level content signal for collapsed graphical descriptions without
+        // promoting every shape and tooltip into separate tree nodes and findings.
+        const directText = normalize(`${literalDirectText} ${collapsedSvgText}`)
         const text = normalize([directText, ...children.map((child) => child.text ?? '')].join(' '))
         const implicitRoles: Record<string, string> = {
           A: 'link',
@@ -125,8 +186,17 @@ async function serialize(
             element.getAttribute('aria-label') ??
               element.getAttribute('alt') ??
               element.getAttribute('title') ??
-              directText,
+              literalDirectText,
           ) || undefined
+        if (
+          svgDescendant &&
+          children.length === 0 &&
+          !role &&
+          !accessibleName &&
+          !directText &&
+          !explicitSvgSignal
+        )
+          return undefined
         if (!visible && !role && !accessibleName && children.length === 0) return undefined
         const attributes: Record<string, string> = {}
         for (const attribute of Array.from(element.attributes).sort((a, b) =>
@@ -136,7 +206,7 @@ async function serialize(
             attributes[attribute.name] = normalize(attribute.value)
         const node: UiNode = {
           nodeId: `${target === 'reference' ? 'ref' : 'cand'}-${++index}`,
-          tag: element.tagName.toLowerCase(),
+          tag,
           role,
           accessibleName,
           text: text || undefined,
@@ -144,8 +214,8 @@ async function serialize(
           attributes: Object.keys(attributes).length ? attributes : undefined,
           classes: Array.from(element.classList).sort(),
           bounds: {
-            x: Math.round(rect.x + scrollX),
-            y: Math.round(rect.y + scrollY),
+            x: Math.round(rect.x + scrollX - origin.x),
+            y: Math.round(rect.y + scrollY - origin.y),
             width: Math.round(rect.width),
             height: Math.round(rect.height),
           },
@@ -189,8 +259,6 @@ async function serialize(
         if (file || line || column || component) node.source = { file, line, column, component }
         return node
       }
-      const root = rootSelector ? document.querySelector(rootSelector) : document.documentElement
-      if (!root) throw new Error(`Selector did not match: ${rootSelector}`)
       return walk(root, rootSelector ?? 'html')!
     },
     { target, ignored, textRules, rootSelector },

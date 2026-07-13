@@ -80,12 +80,14 @@ async function crop(
   destination: string,
   bounds?: Bounds,
 ): Promise<string | undefined> {
-  if (!bounds) return
+  if (!bounds || bounds.width <= 0 || bounds.height <= 0) return
   const image = PNG.sync.read(await readFile(sourcePath))
   const x = Math.max(0, Math.floor(bounds.x))
   const y = Math.max(0, Math.floor(bounds.y))
-  const width = Math.max(1, Math.min(image.width - x, Math.ceil(bounds.width)))
-  const height = Math.max(1, Math.min(image.height - y, Math.ceil(bounds.height)))
+  const right = Math.min(image.width, Math.ceil(bounds.x + bounds.width))
+  const bottom = Math.min(image.height, Math.ceil(bounds.y + bounds.height))
+  const width = right - x
+  const height = bottom - y
   if (width < 1 || height < 1) return
   const output = new PNG({ width, height })
   PNG.bitblt(image, output, x, y, width, height, 0, 0)
